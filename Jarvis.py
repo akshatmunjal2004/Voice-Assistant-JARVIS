@@ -4,10 +4,11 @@ import datetime
 import wikipedia
 import webbrowser
 import smtplib
+import requests
 
 # Initialize TTS engine
 engine = pyttsx3.init()
-engine.setProperty('rate', 150)  # Speaking speed (words per minute)
+engine.setProperty('rate', 150)
 
 # Contact list for email
 contacts = {
@@ -17,6 +18,7 @@ contacts = {
 }
 
 def speak(audio):
+    print(f"Jarvis: {audio}")
     engine.say(audio)
     engine.runAndWait()
 
@@ -55,12 +57,36 @@ def sendEmail(to, content):
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.ehlo()
         server.starttls()
-        server.login('your_email@gmail.com', 'your_app_password')  # Use App Password here
+        server.login('your_email@gmail.com', 'your_app_password')
         server.sendmail('your_email@gmail.com', to, content)
         server.close()
     except Exception as e:
         print("Failed to send email:", e)
 
+def get_weather(city):
+    api_key = "cf3b55aa601d98eb1eacd10ff9a410db"
+    base_url = "http://api.openweathermap.org/data/2.5/weather?"
+    full_url = f"{base_url}q={city}&appid={api_key}&units=metric"
+
+    print("Requesting:", full_url)
+    response = requests.get(full_url)
+    data = response.json()
+    print("Response:", data)
+
+    if data.get("cod") != 200:
+        speak(f"Sorry, I couldn't find the weather for {city}. Error: {data.get('message')}")
+        return
+
+    temp = data['main']['temp']
+    weather_desc = data['weather'][0]['description']
+    humidity = data['main']['humidity']
+    wind_speed = data['wind']['speed']
+
+    weather_report = f"The weather in {city} is {weather_desc} with a temperature of {temp} degrees Celsius, humidity at {humidity} percent, and wind speed of {wind_speed} meters per second."
+    speak(weather_report)
+
+
+# ========== MAIN LOOP ==========
 if __name__ == "__main__":
     wishme()
 
@@ -70,7 +96,7 @@ if __name__ == "__main__":
             continue
 
         if "jarvis" not in query:
-            continue  # Only respond if wake word is present
+            continue
 
         query = query.replace("jarvis", "").strip()
 
@@ -80,10 +106,17 @@ if __name__ == "__main__":
             try:
                 results = wikipedia.summary(query, sentences=2)
                 speak("According to Wikipedia")
-                print(results)
                 speak(results)
             except Exception:
                 speak("Sorry, I couldn't find any results.")
+
+        elif 'weather' in query:
+            speak("Which city's weather do you want to know?")
+            city = takecommand()
+            if city != "none":
+                get_weather(city)
+            else:
+                speak("I didn't catch the city name.")
 
         elif 'search' in query and 'youtube' in query:
             query = query.replace('search', '').replace('youtube', '').strip()
@@ -129,7 +162,6 @@ if __name__ == "__main__":
 
                 speak("What should I say?")
                 content = takecommand()
-
                 sendEmail(to, content)
                 speak("Email has been sent successfully!")
             except Exception as e:
