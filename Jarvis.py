@@ -5,9 +5,16 @@ import wikipedia
 import webbrowser
 import smtplib
 
-engine = pyttsx3.init('sapi5')
-voices = engine.getProperty('voices')
-engine.setProperty('voice', voices[0].id)
+# Initialize TTS engine
+engine = pyttsx3.init()
+engine.setProperty('rate', 150)  # Speaking speed (words per minute)
+
+# Contact list for email
+contacts = {
+    "john": "john@example.com",
+    "alice": "alice@example.com",
+    "akshat": "your_email@example.com"
+}
 
 def speak(audio):
     engine.say(audio)
@@ -15,27 +22,31 @@ def speak(audio):
 
 def wishme():
     hour = int(datetime.datetime.now().hour)
-    if hour >= 0 and hour < 12:
-        speak("Good morning, sir.")
-    elif hour >= 12 and hour < 18:
-        speak("Good afternoon, sir.")
+    if 0 <= hour < 12:
+        speak("Good morning")
+    elif 12 <= hour < 18:
+        speak("Good afternoon")
     else:
-        speak("Good evening, sir.")
-    speak("I am Jarvis, your personal assistant. How may I assist you today?")
+        speak("Good evening")
+    speak("Hello, I am Jarvis. How can I help you?")
 
 def takecommand():
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        print("Listening.....")
+        print("Listening...")
         r.pause_threshold = 1
-        audio = r.listen(source)
+        try:
+            audio = r.listen(source, timeout=5, phrase_time_limit=10)
+        except Exception as e:
+            print("Microphone error:", e)
+            return "none"
 
     try:
-        print("Recognizing.....")
+        print("Recognizing...")
         query = r.recognize_google(audio, language='en-in')
-        print(f"user said: {query}\n")
+        print(f"User said: {query}")
     except Exception:
-        print("Say that again please.....")
+        print("Could not understand. Please say again.")
         return "none"
     return query.lower()
 
@@ -44,28 +55,24 @@ def sendEmail(to, content):
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.ehlo()
         server.starttls()
-        server.login('avats1044@gmail.com', 'Arpit123#')
-        server.sendmail('avats1044@gmail.com', to, content)
+        server.login('your_email@gmail.com', 'your_app_password')  # Use App Password here
+        server.sendmail('your_email@gmail.com', to, content)
         server.close()
     except Exception as e:
         print("Failed to send email:", e)
 
 if __name__ == "__main__":
     wishme()
+
     while True:
         query = takecommand()
-
         if query == "none":
             continue
 
-        # Optional: Only respond if your name Jarvis is mentioned
-        if 'jarvis' not in query:
-            # You can skip processing if you want wake word control
-            # Otherwise comment this continue to always respond
-            continue
+        if "jarvis" not in query:
+            continue  # Only respond if wake word is present
 
-        # Remove wake word from query for easier command detection
-        query = query.replace('jarvis', '').strip()
+        query = query.replace("jarvis", "").strip()
 
         if 'wikipedia' in query:
             speak('Searching Wikipedia...')
@@ -76,16 +83,16 @@ if __name__ == "__main__":
                 print(results)
                 speak(results)
             except Exception:
-                speak("Sorry, I couldn't find any results on Wikipedia.")
+                speak("Sorry, I couldn't find any results.")
 
-        elif 'search' in query and 'in youtube' in query:
-            query = query.replace('search', '').replace('in youtube', '').strip()
+        elif 'search' in query and 'youtube' in query:
+            query = query.replace('search', '').replace('youtube', '').strip()
             url = 'https://www.youtube.com/results?search_query=' + query.replace(' ', '+')
             speak(f"Searching YouTube for {query}")
             webbrowser.open_new(url)
 
-        elif 'search' in query and 'in google' in query:
-            query = query.replace('search', '').replace('in google', '').strip()
+        elif 'search' in query and 'google' in query:
+            query = query.replace('search', '').replace('google', '').strip()
             url = 'https://www.google.com/search?q=' + query.replace(' ', '+')
             speak(f"Searching Google for {query}")
             webbrowser.open_new(url)
@@ -93,10 +100,6 @@ if __name__ == "__main__":
         elif 'open youtube' in query:
             speak('Opening YouTube')
             webbrowser.open_new('https://youtube.com')
-
-        elif 'open python' in query:
-            speak('Opening Coursera Python courses')
-            webbrowser.open_new("https://coursera.org")
 
         elif 'open google' in query:
             speak('Opening Google')
@@ -114,9 +117,28 @@ if __name__ == "__main__":
             speak('Opening Spotify')
             webbrowser.open_new('https://spotify.com')
 
+        elif 'send email' in query:
+            try:
+                speak("Who is the recipient?")
+                recipient_name = takecommand().lower()
+                to = contacts.get(recipient_name)
+
+                if to is None:
+                    speak(f"I don't have an email address for {recipient_name}.")
+                    continue
+
+                speak("What should I say?")
+                content = takecommand()
+
+                sendEmail(to, content)
+                speak("Email has been sent successfully!")
+            except Exception as e:
+                print(e)
+                speak("Sorry, I was not able to send the email.")
+
         elif 'thank you' in query:
-            speak('You’re welcome, sir.')
+            speak('My pleasure.')
 
         elif 'close' in query or 'exit' in query or 'quit' in query:
-            speak('Goodbye, sir. Have a great day!')
+            speak('Goodbye!')
             break
