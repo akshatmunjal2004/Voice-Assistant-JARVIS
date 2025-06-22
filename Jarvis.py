@@ -6,16 +6,33 @@ import webbrowser
 import smtplib
 import requests
 
-# Initialize TTS engine
+# ========== CONFIG ==========
+
 engine = pyttsx3.init()
 engine.setProperty('rate', 150)
 
-# Contact list for email
 contacts = {
     "john": "john@example.com",
     "alice": "alice@example.com",
     "akshat": "your_email@example.com"
 }
+
+weather_api_key = "cf3b55aa601d98eb1eacd10ff9a410db"
+news_api_key = "f3659c69ba474baa97a0aefa4d4dce33"
+
+country_map = {
+    "india": "in",
+    "united states": "us",
+    "usa": "us",
+    "united kingdom": "gb",
+    "uk": "gb",
+    "canada": "ca",
+    "australia": "au",
+    "germany": "de",
+    "france": "fr"
+}
+
+# ========== CORE FUNCTIONS ==========
 
 def speak(audio):
     print(f"Jarvis: {audio}")
@@ -23,10 +40,10 @@ def speak(audio):
     engine.runAndWait()
 
 def wishme():
-    hour = int(datetime.datetime.now().hour)
-    if 0 <= hour < 12:
+    hour = datetime.datetime.now().hour
+    if hour < 12:
         speak("Good morning")
-    elif 12 <= hour < 18:
+    elif hour < 18:
         speak("Good afternoon")
     else:
         speak("Good evening")
@@ -40,71 +57,106 @@ def takecommand():
         try:
             audio = r.listen(source, timeout=5, phrase_time_limit=10)
         except Exception as e:
-            print("Microphone error:", e)
+            speak("Microphone issue occurred.")
             return "none"
 
     try:
-        print("Recognizing...")
         query = r.recognize_google(audio, language='en-in')
         print(f"User said: {query}")
+        return query.lower()
     except Exception:
-        print("Could not understand. Please say again.")
+        speak("Could not understand. Please say again.")
         return "none"
-    return query.lower()
 
 def sendEmail(to, content):
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.ehlo()
         server.starttls()
         server.login('your_email@gmail.com', 'your_app_password')
         server.sendmail('your_email@gmail.com', to, content)
-        server.close()
+        server.quit()
     except Exception as e:
         print("Failed to send email:", e)
 
 def get_weather(city):
-    api_key = "cf3b55aa601d98eb1eacd10ff9a410db"
-    base_url = "http://api.openweathermap.org/data/2.5/weather?"
-    full_url = f"{base_url}q={city}&appid={api_key}&units=metric"
-
-    print("Requesting:", full_url)
-    response = requests.get(full_url)
-    data = response.json()
-    print("Response:", data)
-
-    if data.get("cod") != 200:
-        speak(f"Sorry, I couldn't find the weather for {city}. Error: {data.get('message')}")
+    if not city or city == "none":
+        speak("I didn't catch the city name.")
         return
 
-    temp = data['main']['temp']
-    weather_desc = data['weather'][0]['description']
-    humidity = data['main']['humidity']
-    wind_speed = data['wind']['speed']
+    full_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={weather_api_key}&units=metric"
+    try:
+        response = requests.get(full_url)
+        data = response.json()
 
-    weather_report = f"The weather in {city} is {weather_desc} with a temperature of {temp} degrees Celsius, humidity at {humidity} percent, and wind speed of {wind_speed} meters per second."
-    speak(weather_report)
+        if data.get("cod") != 200:
+            speak(f"Sorry, I couldn't find the weather for {city}.")
+            return
+
+        temp = data['main']['temp']
+        weather_desc = data['weather'][0]['description']
+        humidity = data['main']['humidity']
+        wind_speed = data['wind']['speed']
+
+        weather_report = (
+            f"The weather in {city} is {weather_desc}, "
+            f"temperature is {temp}°C, humidity is {humidity} percent, "
+            f"and wind speed is {wind_speed} meters per second."
+        )
+        speak(weather_report)
+
+    except Exception as e:
+        speak("I was unable to fetch the weather.")
+        print("Weather error:", e)
+
+def get_news():
+    speak("Which country's news would you like to hear?")
+    country_input = takecommand().lower()
+
+    country_code = country_map.get(country_input)
+    if not country_code:
+        speak("Sorry, I don't support news from that country yet.")
+        return
+
+    api_key = "f3659c69ba474baa97a0aefa4d4dce33"
+    url = f"https://newsapi.org/v2/top-headlines?country={country_code}&apiKey={api_key}"
+
+    try:
+        response = requests.get(url)
+        news_data = response.json()
+
+        if news_data["status"] != "ok" or not news_data["articles"]:
+            speak("Sorry, no news found.")
+            return
+
+        articles = news_data["articles"][:5]
+        speak(f"Here are the top news headlines from {country_input.capitalize()}.")
+
+        for i, article in enumerate(articles, 1):
+            title = article.get('title')
+            if title:
+                speak(f"News {i}: {title}")
+            else:
+                speak(f"News {i}: Title not available")
+
+    except Exception as e:
+        speak("An error occurred while getting the news.")
+        print("News error:", e)
 
 
-# ========== MAIN LOOP ==========
 if __name__ == "__main__":
     wishme()
 
     while True:
         query = takecommand()
-        if query == "none":
-            continue
-
-        if "jarvis" not in query:
+        if query == "none" or "jarvis" not in query:
             continue
 
         query = query.replace("jarvis", "").strip()
 
         if 'wikipedia' in query:
             speak('Searching Wikipedia...')
-            query = query.replace("wikipedia", "").strip()
             try:
-                results = wikipedia.summary(query, sentences=2)
+                results = wikipedia.summary(query.replace("wikipedia", ""), sentences=2)
                 speak("According to Wikipedia")
                 speak(results)
             except Exception:
@@ -112,23 +164,20 @@ if __name__ == "__main__":
 
         elif 'weather' in query:
             speak("Which city's weather do you want to know?")
-            city = takecommand()
-            if city != "none":
-                get_weather(city)
-            else:
-                speak("I didn't catch the city name.")
+            get_weather(takecommand())
+
+        elif 'news' in query:
+            get_news()
 
         elif 'search' in query and 'youtube' in query:
             query = query.replace('search', '').replace('youtube', '').strip()
-            url = 'https://www.youtube.com/results?search_query=' + query.replace(' ', '+')
             speak(f"Searching YouTube for {query}")
-            webbrowser.open_new(url)
+            webbrowser.open_new(f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}")
 
         elif 'search' in query and 'google' in query:
             query = query.replace('search', '').replace('google', '').strip()
-            url = 'https://www.google.com/search?q=' + query.replace(' ', '+')
             speak(f"Searching Google for {query}")
-            webbrowser.open_new(url)
+            webbrowser.open_new(f"https://www.google.com/search?q={query.replace(' ', '+')}")
 
         elif 'open youtube' in query:
             speak('Opening YouTube')
@@ -151,22 +200,17 @@ if __name__ == "__main__":
             webbrowser.open_new('https://spotify.com')
 
         elif 'send email' in query:
-            try:
-                speak("Who is the recipient?")
-                recipient_name = takecommand().lower()
-                to = contacts.get(recipient_name)
+            speak("Who is the recipient?")
+            recipient_name = takecommand().lower()
+            to = contacts.get(recipient_name)
 
-                if to is None:
-                    speak(f"I don't have an email address for {recipient_name}.")
-                    continue
-
+            if to:
                 speak("What should I say?")
                 content = takecommand()
                 sendEmail(to, content)
                 speak("Email has been sent successfully!")
-            except Exception as e:
-                print(e)
-                speak("Sorry, I was not able to send the email.")
+            else:
+                speak(f"I don't have an email address for {recipient_name}.")
 
         elif 'thank you' in query:
             speak('My pleasure.')
